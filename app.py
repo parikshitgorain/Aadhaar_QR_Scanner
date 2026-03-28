@@ -118,7 +118,7 @@ def try_decode_qr(img):
                 for d in decoded_info:
                     if d and len(d) > 100:
                         return d
-        except:
+        except (cv2.error, ValueError, TypeError):
             pass
 
         # single decode
@@ -126,7 +126,7 @@ def try_decode_qr(img):
             data, _, _ = detector.detectAndDecode(cv_img)
             if data and len(data) > 100:
                 return data
-        except:
+        except (cv2.error, ValueError, TypeError):
             pass
 
     # fallback pyzbar
@@ -135,7 +135,7 @@ def try_decode_qr(img):
         decoded = decode(pil_to_cv(img))
         if decoded:
             return decoded[0].data.decode("utf-8", errors="ignore")
-    except:
+    except (ImportError, IndexError, AttributeError, UnicodeDecodeError):
         pass
 
     raise QRAppError("QR_NOT_FOUND", "Failed to decode QR")
@@ -144,19 +144,30 @@ def try_decode_qr(img):
 # ----------------------------
 # Decompression
 # ----------------------------
+# Maximum decompressed size: 10MB (real Aadhaar QR codes are ~1-2KB)
+MAX_DECOMPRESSED_SIZE = 10 * 1024 * 1024
+
 def try_decompress(blob):
+    import bz2
+
     methods = [
         ("gzip", lambda b: gzip.decompress(b)),
         ("zlib", lambda b: zlib.decompress(b)),
         ("deflate", lambda b: zlib.decompress(b, -15)),
-        ("bz2", lambda b: __import__("bz2").decompress(b)),
+        ("bz2", lambda b: bz2.decompress(b)),
         ("lzma", lambda b: lzma.decompress(b)),
     ]
 
     for name, func in methods:
         try:
-            return func(blob), name
-        except:
+            decompressed = func(blob)
+            # Validate decompressed size to prevent decompression bombs
+            if len(decompressed) > MAX_DECOMPRESSED_SIZE:
+                continue
+            return decompressed, name
+        except (zlib.error, lzma.LZMAError, gzip.BadGzipFile, bz2.Error, MemoryError, OSError):
+            continue
+        except Exception:
             continue
 
     return None, None
@@ -177,15 +188,16 @@ def extract_image(blob):
     png_header = b"\x89PNG"
     if png_header in blob:
         start = blob.find(png_header)
-        # PNG ends with IEND chunk
-        iend = blob.find(b"IEND")
+        # PNG ends with IEND chunk (4-byte length + "IEND" + 4-byte CRC = 12 bytes)
+        iend = blob.find(b"IEND", start)
         if iend > start:
+            # Include the entire IEND chunk (4 bytes before "IEND" + 4 bytes + 4 bytes CRC after)
             return blob[start:iend + 8], "png"
 
     # Try JPEG2000 codestream (FF4F FF51)
     j2k_marker = b"\xff\x4f\xff\x51"
     if j2k_marker in blob:
-        start = blob.find(b"\xff\x4f")
+        start = blob.find(j2k_marker)
         # J2K ends with EOC marker FF D9
         end = blob.rfind(b"\xff\xd9")
         if end > start:
@@ -214,8 +226,7 @@ def convert_j2k_to_jpeg(j2k_data):
         buf = io.BytesIO()
         img.convert("RGB").save(buf, format="JPEG", quality=85)
         return buf.getvalue()
-    except Exception as e:
-        print(f"J2K conversion failed: {e}")
+    except Exception:
         return None
 
 
@@ -263,7 +274,6 @@ def detect_and_crop_face(image_bytes):
         return img, False
 
     except Exception as e:
-        print(f"Face detection failed: {e}")
         # Return original image if face detection fails
         return Image.open(io.BytesIO(image_bytes)), False
 
@@ -336,8 +346,7 @@ def parse_binary_payload(data):
                         printable_after = "".join(c for c in decoded_after if c.isprintable() or c in "\n\r\t ")
                         if len(printable_after.strip()) > 5:
                             text_after = printable_after.strip()
-                            print(f"Found text AFTER image: {text_after[:100]}")
-                    except:
+                    except Exception:
                         pass
 
         # CRITICAL: Use latin-1 FIRST because UTF-8 drops \xff bytes!
@@ -345,16 +354,10 @@ def parse_binary_payload(data):
         try:
             # Skip leading control bytes but KEEP \xff delimiter
             clean_text = text_part.lstrip(b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f")
-            
-            # DEBUG: Show raw bytes to check for delimiters
-            print(f"\n=== RAW TEXT BYTES (first 300) ===")
-            print(f"Hex: {clean_text[:300].hex(' ')}")
-            print(f"Bytes with delimiters visible: {repr(clean_text[:300])}")
-            print(f"===================================\n")
-            
+
             # Use latin-1 which preserves ALL bytes including \xff
             decoded = clean_text.decode("latin-1")
-            
+
             # CRITICAL: Keep \xff delimiter (ord 255)
             # Filter but preserve: printable ASCII + delimiter (255) + special chars
             decoded_with_delim = ""
@@ -363,18 +366,14 @@ def parse_binary_payload(data):
                 # Keep: printable ASCII (32-126), delimiter (255), space, special chars
                 if (32 <= code <= 126) or code == 255 or c in "\n\r\t":
                     decoded_with_delim += c
-            
+
             if len(decoded_with_delim) > 10:
                 result["text"] = decoded_with_delim.strip()
                 # Append text found after image if any
                 if text_after:
                     result["text"] = result["text"] + text_after
-                
-                # Count delimiters to verify
-                delim_count = decoded_with_delim.count(chr(255))
-                print(f"Extracted text (latin-1) with {delim_count} delimiters preserved: {result['text'][:150]}...")
-        except Exception as e:
-            print(f"Text decode error: {e}")
+        except Exception:
+            pass
 
         # Extract image based on type
         if img_type == "jpeg":
@@ -384,8 +383,10 @@ def parse_binary_payload(data):
                 result["format"] = "binary+jpeg"
                 result["image_type"] = "jpeg"
         elif img_type == "png":
+            # PNG ends with IEND chunk (4-byte length + "IEND" + 4-byte CRC = 12 bytes)
             iend = data.find(b"IEND", img_start)
             if iend > img_start:
+                # Include the entire IEND chunk
                 result["image"] = data[img_start:iend + 8]
                 result["format"] = "binary+png"
                 result["image_type"] = "png"
@@ -420,6 +421,17 @@ def parse_binary_payload(data):
 # ----------------------------
 # Parse Aadhaar QR text format into structured fields
 # ----------------------------
+# Indian states and union territories set for efficient lookup
+INDIAN_STATES = {
+    'West Bengal', 'Bihar', 'Jharkhand', 'Odisha', 'Assam', 'Maharashtra',
+    'Gujarat', 'Rajasthan', 'Uttar Pradesh', 'Madhya Pradesh', 'Karnataka',
+    'Tamil Nadu', 'Kerala', 'Andhra Pradesh', 'Telangana', 'Punjab', 'Haryana',
+    'Delhi', 'Chhattisgarh', 'Uttarakhand', 'Himachal Pradesh', 'Jammu and Kashmir',
+    'Goa', 'Tripura', 'Meghalaya', 'Manipur', 'Nagaland', 'Mizoram', 'Sikkim',
+    'Arunachal Pradesh', 'Puducherry', 'Chandigarh', 'Dadra and Nagar Haveli',
+    'Daman and Diu', 'Lakshadweep', 'Andaman and Nicobar Islands'
+}
+
 def parse_aadhaar_text(text):
     """
     Parse Aadhaar Secure QR V2 text format into structured fields.
@@ -444,17 +456,10 @@ def parse_aadhaar_text(text):
     
     if not text or len(text) < 50:
         return result
-    
-    print(f"\n=== PARSING TEXT (length {len(text)}) ===")
-    print(f"First 100 chars: {repr(text[:100])}")
-    
+
     # Split by \xff delimiter (appears as ÿ character)
     delimiter = '\xff' if '\xff' in text else 'ÿ'
     fields = text.split(delimiter)
-    
-    print(f"Found {len(fields)} fields separated by delimiter")
-    for i, field in enumerate(fields[:20]):  # Show first 20 fields
-        print(f"  Field {i}: {repr(field[:50])}")
     
     try:
         # Field structure (may vary by version):
@@ -515,17 +520,20 @@ def parse_aadhaar_text(text):
             if not field:
                 continue
             # Stop if we hit mobile pattern
-            if re.match(r'^X{4,6}\d{4}$', field):
+            if re.match(r'^X{6}\d{4}$', field):
                 result["mobile"] = field
                 # Email might be next field
                 if i + 1 < len(fields):
                     email_field = fields[i + 1].strip()
                     if '@' in email_field:
-                        result["email"] = re.search(r'([a-z][a-z0-9xX]+@[a-z]x+)', email_field, re.I).group(1) if re.search(r'([a-z][a-z0-9xX]+@[a-z]x+)', email_field, re.I) else email_field
+                        # Improved email regex: username@domain
+                        email_match = re.search(r'([a-z0-9][a-z0-9xX._-]*@[a-z0-9][a-z0-9xX._-]*\.[a-z]{2,})', email_field, re.I)
+                        result["email"] = email_match.group(1) if email_match else email_field
                 break
             # Check for email pattern
             if '@' in field:
-                email_match = re.search(r'([a-z][a-z0-9xX]+@[a-z]x+)', field, re.I)
+                # Improved email regex: username@domain
+                email_match = re.search(r'([a-z0-9][a-z0-9xX._-]*@[a-z0-9][a-z0-9xX._-]*\.[a-z]{2,})', field, re.I)
                 if email_match:
                     result["email"] = email_match.group(1)
                     break
@@ -533,14 +541,8 @@ def parse_aadhaar_text(text):
             if re.match(r'^\d{6}$', field):
                 pin_code = field
                 continue
-            # Identify State (common Indian states)
-            if field in ['West Bengal', 'Bihar', 'Jharkhand', 'Odisha', 'Assam', 'Maharashtra', 
-                        'Gujarat', 'Rajasthan', 'Uttar Pradesh', 'Madhya Pradesh', 'Karnataka',
-                        'Tamil Nadu', 'Kerala', 'Andhra Pradesh', 'Telangana', 'Punjab', 'Haryana',
-                        'Delhi', 'Chhattisgarh', 'Uttarakhand', 'Himachal Pradesh', 'Jammu and Kashmir',
-                        'Goa', 'Tripura', 'Meghalaya', 'Manipur', 'Nagaland', 'Mizoram', 'Sikkim',
-                        'Arunachal Pradesh', 'Puducherry', 'Chandigarh', 'Dadra and Nagar Haveli',
-                        'Daman and Diu', 'Lakshadweep', 'Andaman and Nicobar Islands']:
+            # Identify State (common Indian states) - use set for O(1) lookup
+            if field in INDIAN_STATES:
                 state = field
                 continue
             addr_fields.append(field)
@@ -557,22 +559,13 @@ def parse_aadhaar_text(text):
             else:
                 addr_str += "."
             result["address"] = addr_str
-        
+
         # Mark as parsed
         if result.get("name") or result.get("aadhaar"):
             result["parsed"] = True
-        
-        print(f"\n=== PARSED RESULT ===")
-        print(f"Aadhaar: {result['aadhaar']}")
-        print(f"Name: {result['name']}")
-        print(f"Mobile: {result['mobile']}")
-        print(f"Email: {result['email']}")
-        print(f"Address: {result['address'][:100] if result['address'] else None}...")
-        
-    except Exception as e:
-        print(f"Aadhaar parsing error: {e}")
-        import traceback
-        traceback.print_exc()
+
+    except Exception:
+        pass
     
     return result
 
@@ -588,6 +581,9 @@ SEPARATOR = b"\x00\x00\x00\x00IMGSTART\x00\x00\x00\x00"
 # ----------------------------
 # MAIN DECODER WITH CACHE 🔥
 # ----------------------------
+# Maximum numeric string length: 100K characters (real Aadhaar is ~3000)
+MAX_NUMERIC_STRING_LENGTH = 100000
+
 def decode_payload(raw):
     steps = []
     debug = {
@@ -614,7 +610,17 @@ def decode_payload(raw):
 
     steps.append({"msg": f"QR contains numeric data ({len(raw)} digits)", "ok": True})
 
-    n = int(raw)
+    # Validate numeric string length to prevent integer conversion DoS
+    if len(raw) > MAX_NUMERIC_STRING_LENGTH:
+        steps.append({"msg": f"Numeric string too long ({len(raw)} > {MAX_NUMERIC_STRING_LENGTH})", "ok": False})
+        raise QRAppError("NUMERIC_TOO_LONG", f"Numeric data exceeds maximum length of {MAX_NUMERIC_STRING_LENGTH}")
+
+    try:
+        n = int(raw)
+    except (ValueError, MemoryError) as e:
+        steps.append({"msg": f"Failed to convert numeric string to integer: {e}", "ok": False})
+        raise QRAppError("INVALID_NUMERIC", "Failed to convert numeric data to integer")
+
     base_len = (n.bit_length() + 7) // 8
     steps.append({"msg": f"Converted to big integer, base byte length: {base_len}", "ok": True})
 
@@ -727,7 +733,7 @@ def decode_payload(raw):
                             if len(printable.strip()) > 10:
                                 result["text"] = printable.strip()
                                 steps.append({"msg": f"Fallback text: {len(result['text'])} chars", "ok": True})
-                        except:
+                        except (UnicodeDecodeError, AttributeError):
                             pass
                     
                     # Parse Aadhaar format if text found
@@ -736,11 +742,6 @@ def decode_payload(raw):
                         if aadhaar_data.get("parsed"):
                             result["aadhaar_data"] = aadhaar_data
                             steps.append({"msg": "Parsed Aadhaar data structure", "ok": True})
-                            # DEBUG: Show what we're sending to frontend
-                            print(f"\n=== FINAL AADHAAR DATA BEING SENT ===")
-                            print(f"Email field value: '{aadhaar_data.get('email')}'")
-                            print(f"Mobile field value: '{aadhaar_data.get('mobile')}'")
-                            print(f"=====================================\n")
                         
                         # Add FULL decoded data for comparison
                         # Split by delimiter and show all fields
@@ -759,7 +760,7 @@ def decode_payload(raw):
                 debug["success"] = extra
                 return result
 
-        except Exception as e:
+        except (ValueError, MemoryError, OverflowError):
             continue
 
     steps.append({"msg": f"All {50} decompression attempts failed", "ok": False})
@@ -783,8 +784,6 @@ def api_decode():
 
         img = image_bytes_to_pil(file.read())
         raw = try_decode_qr(img)
-
-        print("RAW LENGTH:", len(raw))
 
         decoded = decode_payload(raw)
 
@@ -972,11 +971,9 @@ def api_encode():
                     # Add trailing delimiter to match original format
                     text_str = DELIM.join(fields) + DELIM
                     text_bytes = text_str.encode('latin-1')
-                    
+
                     encode_info["format"] = "aadhaar_structured"
                     encode_info["field_count"] = len(fields)
-                    print(f"Encoded Aadhaar format with {len(fields)} fields using \\xff delimiter")
-                    print(f"Fields: {fields[:10]}...")
                 else:
                     # Regular JSON - encode as UTF-8
                     text_bytes = text.encode("utf-8")
@@ -1016,57 +1013,57 @@ def api_encode():
             try:
                 import glymur
                 import tempfile as tf
-                
+
                 # Save temp file and encode with glymur
                 img_array = np.array(rgb_img)
-                
-                # Use .jp2 extension (glymur works better with it), then extract J2K
-                tmp_path = os.path.join(tempfile.gettempdir(), f"qr_encode_{os.getpid()}.jp2")
-                
-                # Create JP2 with aggressive compression (~900 bytes target for J2K codestream)
-                for cratio in [60, 55, 50, 45, 40]:
-                    try:
-                        # Write to JP2 file
-                        jp2 = glymur.Jp2k(tmp_path, data=img_array, cratios=[cratio])
-                        
-                        with open(tmp_path, 'rb') as f:
-                            temp_bytes = f.read()
-                        
-                        print(f"glymur cratio={cratio}: wrote {len(temp_bytes)} bytes")
-                        
-                        if len(temp_bytes) < 10:
-                            continue
-                        
-                        # Extract J2K codestream from JP2 container
-                        j2k_start = temp_bytes.find(b'\xff\x4f')
-                        if j2k_start >= 0:
-                            j2k_bytes = temp_bytes[j2k_start:]
-                            print(f"glymur extracted J2K: {len(j2k_bytes)} bytes")
-                            if 700 < len(j2k_bytes) < 1100:
-                                img_bytes = j2k_bytes
-                                encode_info["image_format"] = "jpeg2000"
-                                j2k_success = True
-                                print(f"glymur J2K success: {len(img_bytes)} bytes at cratio={cratio}")
-                                break
-                    except Exception as e:
-                        print(f"glymur cratio {cratio} error: {e}")
-                        continue
-                
+
+                # Use secure temp file with proper cleanup
+                tmp_fd, tmp_path = tempfile.mkstemp(suffix=".jp2", prefix="qr_encode_")
+
                 try:
-                    os.unlink(tmp_path)
-                except:
-                    pass
-                    
+                    os.close(tmp_fd)  # Close the file descriptor, we'll write with glymur
+
+                    # Create JP2 with aggressive compression (~900 bytes target for J2K codestream)
+                    for cratio in [60, 55, 50, 45, 40]:
+                        try:
+                            # Write to JP2 file
+                            jp2 = glymur.Jp2k(tmp_path, data=img_array, cratios=[cratio])
+
+                            with open(tmp_path, 'rb') as f:
+                                temp_bytes = f.read()
+
+                            if len(temp_bytes) < 10:
+                                continue
+
+                            # Extract J2K codestream from JP2 container
+                            j2k_start = temp_bytes.find(b'\xff\x4f')
+                            if j2k_start >= 0:
+                                j2k_bytes = temp_bytes[j2k_start:]
+                                if 700 < len(j2k_bytes) < 1100:
+                                    img_bytes = j2k_bytes
+                                    encode_info["image_format"] = "jpeg2000"
+                                    j2k_success = True
+                                    break
+                        except (IOError, OSError, ValueError) as e:
+                            continue
+                finally:
+                    # Always clean up temp file
+                    try:
+                        if os.path.exists(tmp_path):
+                            os.unlink(tmp_path)
+                    except OSError:
+                        pass
+
             except ImportError:
-                print("glymur not installed")
-            except Exception as e:
-                print(f"glymur setup error: {e}")
+                pass
+            except Exception:
+                pass
             
             # Method 2: Try OpenCV JPEG2000
             if img_bytes is None:
                 img_array = np.array(rgb_img)
                 img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
-                
+
                 for compression_ratio in [250, 200, 150, 100]:
                     try:
                         encode_params = [cv2.IMWRITE_JPEG2000_COMPRESSION_X1000, compression_ratio]
@@ -1076,16 +1073,12 @@ def api_encode():
                             if temp_bytes[:2] == b'\xff\x4f' and 700 < len(temp_bytes) < 1100:
                                 img_bytes = temp_bytes
                                 encode_info["image_format"] = "jpeg2000"
-                                print(f"OpenCV J2K success: {len(img_bytes)} bytes")
                                 break
-                    except Exception as e:
-                        print(f"OpenCV J2K error: {e}")
+                    except (cv2.error, ValueError, MemoryError):
                         continue
             
             # Method 3: Pillow JPEG2000 (try multiple approaches)
             if img_bytes is None:
-                print("Trying Pillow JPEG2000...")
-                
                 # dB mode works better - lower dB = smaller file
                 # Target ~900 bytes, so try low dB values first
                 for db in [22, 24, 26, 28, 30]:
@@ -1094,21 +1087,17 @@ def api_encode():
                         rgb_img.save(buf, format="JPEG2000", quality_mode='dB',
                                    quality_layers=[db], irreversible=True)
                         temp_bytes = buf.getvalue()
-                        print(f"Pillow J2K dB={db}: got {len(temp_bytes)} bytes")
-                        
+
                         if temp_bytes[:2] != b'\xff\x4f':
                             j2k_start = temp_bytes.find(b'\xff\x4f')
                             if j2k_start >= 0:
                                 temp_bytes = temp_bytes[j2k_start:]
-                                print(f"Extracted J2K: {len(temp_bytes)} bytes")
-                        
+
                         if temp_bytes[:2] == b'\xff\x4f' and 700 < len(temp_bytes) < 1100:
                             img_bytes = temp_bytes
                             encode_info["image_format"] = "jpeg2000"
-                            print(f"Pillow J2K success: {len(img_bytes)} bytes at dB={db}")
                             break
-                    except Exception as e:
-                        print(f"Pillow J2K dB error at {db}: {e}")
+                    except (IOError, OSError, ValueError, KeyError):
                         continue
             
             # Final fallback: JPEG with size matching
