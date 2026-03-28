@@ -1,0 +1,1863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>QR Code Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --primary: #6366f1;
+  --primary-dark: #4f46e5;
+  --primary-light: #818cf8;
+  --success: #10b981;
+  --error: #ef4444;
+  --warning: #f59e0b;
+  --bg: #0f172a;
+  --bg-card: #1e293b;
+  --bg-input: #334155;
+  --text: #f8fafc;
+  --text-muted: #94a3b8;
+  --border: #475569;
+  --radius: 12px;
+  --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+/* Header */
+.header {
+  background: linear-gradient(135deg, var(--primary) 0%, #8b5cf6 100%);
+  padding: 20px;
+  text-align: center;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: var(--shadow);
+}
+
+.header h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.header p {
+  font-size: 0.875rem;
+  opacity: 0.9;
+  margin-top: 4px;
+}
+
+/* Tab Navigation */
+.tabs {
+  display: flex;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 76px;
+  z-index: 99;
+}
+
+.tab {
+  flex: 1;
+  padding: 16px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.3s;
+  border-bottom: 3px solid transparent;
+  color: var(--text-muted);
+}
+
+.tab.active {
+  color: var(--primary-light);
+  border-bottom-color: var(--primary);
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.tab:hover:not(.active) {
+  background: rgba(255,255,255,0.05);
+}
+
+/* Main Content */
+.main {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 20px;
+  padding-bottom: 100px;
+}
+
+/* Sections */
+.section {
+  display: none;
+}
+
+.section.active {
+  display: block;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Cards */
+.card {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+}
+
+.card-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+/* Drop Zone */
+.drop-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 40px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  background: rgba(99, 102, 241, 0.05);
+}
+
+.drop-zone:hover, .drop-zone.drag {
+  border-color: var(--primary);
+  background: rgba(99, 102, 241, 0.15);
+}
+
+.drop-zone-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.drop-zone-text {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.drop-zone-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 8px;
+  opacity: 0.7;
+}
+
+/* Preview Image */
+.preview-container {
+  position: relative;
+  margin-top: 16px;
+  display: none;
+}
+
+.preview-container.visible {
+  display: block;
+}
+
+.preview-img {
+  width: 100%;
+  max-height: 200px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #000;
+}
+
+.preview-remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.7);
+  border: none;
+  color: white;
+  cursor: pointer;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Buttons */
+.btn {
+  width: 100%;
+  padding: 16px;
+  border: none;
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: white;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(99, 102, 241, 0.3);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  background: var(--bg-input);
+  color: var(--text);
+}
+
+.btn-success {
+  background: var(--success);
+  color: white;
+}
+
+.btn-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+/* Status */
+.status {
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.status-icon {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.status.info { background: rgba(99, 102, 241, 0.2); }
+.status.info .status-icon { background: var(--primary); }
+
+.status.success { background: rgba(16, 185, 129, 0.2); }
+.status.success .status-icon { background: var(--success); }
+
+.status.error { background: rgba(239, 68, 68, 0.2); }
+.status.error .status-icon { background: var(--error); }
+
+.status.warning { background: rgba(245, 158, 11, 0.2); }
+.status.warning .status-icon { background: var(--warning); }
+
+/* Steps */
+.steps {
+  margin-top: 16px;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 0.813rem;
+  margin-bottom: 6px;
+}
+
+.step.success {
+  background: rgba(16, 185, 129, 0.15);
+  color: #6ee7b7;
+}
+
+.step.fail {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+}
+
+.step-icon {
+  font-weight: bold;
+  font-size: 1rem;
+}
+
+/* Results */
+.result-section {
+  margin-top: 20px;
+}
+
+.result-card {
+  background: var(--bg-input);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-top: 12px;
+}
+
+.result-text {
+  font-family: 'Monaco', 'Consolas', monospace;
+  font-size: 0.813rem;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+  color: #e2e8f0;
+}
+
+/* Aadhaar Card Styling */
+.aadhaar-card {
+  background: linear-gradient(135deg, #1a1f2e 0%, #0f1219 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.aadhaar-field {
+  display: flex;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.aadhaar-field:last-child {
+  border-bottom: none;
+}
+
+.field-label {
+  color: #94a3b8;
+  font-size: 0.85rem;
+  font-weight: 600;
+  min-width: 100px;
+  text-transform: uppercase;
+}
+
+.field-value {
+  color: #e2e8f0;
+  font-size: 0.95rem;
+  flex: 1;
+}
+
+/* Extracted Image */
+.extracted-image {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: #000;
+  border-radius: var(--radius);
+  cursor: pointer;
+  position: relative;
+}
+
+.extracted-image img {
+  max-width: 150px;
+  max-height: 150px;
+  border-radius: 8px;
+  border: 2px solid var(--primary);
+}
+
+.extracted-image .zoom-hint {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(0,0,0,0.7);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Debug Accordion */
+.accordion {
+  margin-top: 20px;
+}
+
+.accordion-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: var(--bg-input);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.accordion-header:hover {
+  background: var(--border);
+}
+
+.accordion-icon {
+  transition: transform 0.3s;
+}
+
+.accordion.open .accordion-icon {
+  transform: rotate(180deg);
+}
+
+.accordion-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.accordion.open .accordion-content {
+  max-height: 2000px;
+}
+
+.accordion-inner {
+  padding: 16px;
+  background: rgba(0,0,0,0.2);
+  border-radius: 0 0 var(--radius) var(--radius);
+  margin-top: 2px;
+}
+
+.debug-block {
+  margin-bottom: 16px;
+}
+
+.debug-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.debug-content {
+  background: var(--bg);
+  padding: 12px;
+  border-radius: 8px;
+  font-family: monospace;
+  font-size: 0.75rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 150px;
+  overflow-y: auto;
+  color: #a5b4fc;
+}
+
+/* Fields table for decoded data */
+.fields-table {
+  background: var(--bg);
+  border-radius: 8px;
+  overflow: hidden;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.field-row {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  font-family: monospace;
+  font-size: 0.8rem;
+}
+
+.field-row:last-child {
+  border-bottom: none;
+}
+
+.field-row:hover {
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.field-index {
+  width: 60px;
+  padding: 10px 12px;
+  background: rgba(0,0,0,0.3);
+  color: var(--text-muted);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.field-value {
+  flex: 1;
+  padding: 10px 12px;
+  color: #a5b4fc;
+  word-break: break-all;
+}
+
+.field-value.empty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Encode Section */
+.input-group {
+  margin-bottom: 16px;
+}
+
+.input-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+/* Form row for side-by-side fields */
+.form-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.form-row .input-group {
+  margin-bottom: 0;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+.flex-2 {
+  flex: 2;
+}
+
+/* Form inputs */
+.form-input {
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.875rem;
+  transition: border-color 0.3s;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.form-input::placeholder {
+  color: var(--text-muted);
+}
+
+select.form-input {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.875rem;
+  resize: vertical;
+  transition: border-color 0.3s;
+}
+
+textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.file-input-wrapper {
+  position: relative;
+}
+
+.file-input {
+  display: none;
+}
+
+.file-input-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px;
+  background: var(--bg-input);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.3s;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.file-input-btn:hover {
+  border-color: var(--primary);
+  color: var(--text);
+}
+
+.file-preview {
+  display: none;
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--bg-input);
+  border-radius: 8px;
+  align-items: center;
+  gap: 12px;
+}
+
+.file-preview.visible {
+  display: flex;
+}
+
+.file-preview img {
+  width: 50px;
+  height: 50px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.file-preview-info {
+  flex: 1;
+  font-size: 0.813rem;
+  color: var(--text-muted);
+}
+
+.file-preview-remove {
+  background: none;
+  border: none;
+  color: var(--error);
+  cursor: pointer;
+  font-size: 1.25rem;
+}
+
+/* Generated QR */
+.qr-result {
+  text-align: center;
+  padding: 30px 20px;
+  background: white;
+  border-radius: var(--radius);
+  margin-top: 16px;
+}
+
+.qr-result img {
+  max-width: 250px;
+  width: 100%;
+}
+
+.qr-placeholder {
+  padding: 40px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.9);
+  z-index: 1000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeIn 0.2s ease;
+}
+
+.modal-overlay.visible {
+  display: flex;
+}
+
+.modal-content {
+  position: relative;
+  max-width: 90vw;
+  max-height: 90vh;
+}
+
+.modal-content img {
+  max-width: 100%;
+  max-height: 80vh;
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
+.modal-close {
+  position: absolute;
+  top: -40px;
+  right: 0;
+  background: none;
+  border: none;
+  color: white;
+  font-size: 2rem;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: opacity 0.3s;
+}
+
+.modal-close:hover {
+  opacity: 1;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.modal-btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background: var(--bg-card);
+  padding: 12px 24px;
+  border-radius: 50px;
+  box-shadow: var(--shadow);
+  font-size: 0.875rem;
+  z-index: 1001;
+  opacity: 0;
+  transition: all 0.3s;
+  border: 1px solid var(--border);
+}
+
+.toast.visible {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+/* Loading Spinner */
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive */
+@media (min-width: 768px) {
+  .header h1 {
+    font-size: 1.75rem;
+  }
+
+  .main {
+    padding: 30px;
+  }
+
+  .drop-zone {
+    padding: 60px 40px;
+  }
+}
+
+/* Mobile responsive for form rows */
+@media (max-width: 600px) {
+  .form-row {
+    flex-direction: column;
+    gap: 0;
+  }
+  
+  .form-row .input-group {
+    margin-bottom: 16px;
+  }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Hide file input */
+input[type="file"] {
+  display: none;
+}
+
+/* Toggle Switch */
+.toggle-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  background: var(--bg-input);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.toggle-label {
+  font-size: 0.875rem;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.toggle-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.toggle-switch {
+  position: relative;
+  width: 48px;
+  height: 26px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--border);
+  transition: 0.3s;
+  border-radius: 26px;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background-color: var(--primary);
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+  transform: translateX(22px);
+}
+
+/* Info Badge */
+.info-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(99, 102, 241, 0.15);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  color: var(--primary-light);
+  margin-top: 8px;
+}
+
+</style>
+</head>
+
+<body>
+
+<!-- Header -->
+<header class="header">
+  <h1>QR Code Studio</h1>
+  <p>Decode & Encode QR codes with ease</p>
+</header>
+
+<!-- Tabs -->
+<nav class="tabs">
+  <div class="tab active" data-tab="decode">Decode</div>
+  <div class="tab" data-tab="encode">Encode</div>
+</nav>
+
+<!-- Main Content -->
+<main class="main">
+
+  <!-- Decode Section -->
+  <section id="decode" class="section active">
+
+    <div class="card">
+      <div class="drop-zone" id="dropZone">
+        <div class="drop-zone-icon">📷</div>
+        <div class="drop-zone-text">Tap to upload or drag & drop</div>
+        <div class="drop-zone-hint">Supports paste (Ctrl+V)</div>
+      </div>
+
+      <input type="file" id="fileInput" accept="image/*">
+
+      <div class="preview-container" id="previewContainer">
+        <img id="preview" class="preview-img">
+        <button class="preview-remove" onclick="clearDecode()">&times;</button>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="decodeBtn" onclick="decodeCurrent()">
+          <span id="decodeBtnText">Decode QR</span>
+        </button>
+        <button class="btn btn-secondary" onclick="analyzeQR()">
+          <span>🔍</span> Analyze
+        </button>
+      </div>
+
+      <div id="status" class="status info">
+        <span class="status-icon"></span>
+        <span id="statusText">Ready to scan</span>
+      </div>
+    </div>
+
+    <!-- Analysis Card -->
+    <div id="analysisCard" class="card" style="display:none;">
+      <div class="card-title">QR Analysis</div>
+      <div id="analysisContent" class="result-card"></div>
+    </div>
+
+    <!-- Steps -->
+    <div id="stepsCard" class="card" style="display:none;">
+      <div class="card-title">Processing Steps</div>
+      <div id="steps" class="steps"></div>
+    </div>
+
+    <!-- Results -->
+    <div id="resultsCard" class="card" style="display:none;">
+      <div class="card-title">Extracted Data</div>
+
+      <!-- Aadhaar Parsed Data Section -->
+      <div class="result-section" id="aadhaarSection" style="display:none;">
+        <div class="aadhaar-card">
+          <div class="aadhaar-field" id="field-aadhaar" style="display:none;">
+            <span class="field-label">AADHAAR</span>
+            <span class="field-value" id="value-aadhaar"></span>
+          </div>
+          <div class="aadhaar-field" id="field-timestamp" style="display:none;">
+            <span class="field-label">DATA AS ON</span>
+            <span class="field-value" id="value-timestamp"></span>
+          </div>
+          <div class="aadhaar-field" id="field-name" style="display:none;">
+            <span class="field-label">NAME</span>
+            <span class="field-value" id="value-name"></span>
+          </div>
+          <div class="aadhaar-field" id="field-gender" style="display:none;">
+            <span class="field-label">GENDER</span>
+            <span class="field-value" id="value-gender"></span>
+          </div>
+          <div class="aadhaar-field" id="field-dob" style="display:none;">
+            <span class="field-label">DOB</span>
+            <span class="field-value" id="value-dob"></span>
+          </div>
+          <div class="aadhaar-field" id="field-mobile" style="display:none;">
+            <span class="field-label">MOBILE</span>
+            <span class="field-value" id="value-mobile"></span>
+          </div>
+          <div class="aadhaar-field" id="field-email" style="display:none;">
+            <span class="field-label">EMAIL</span>
+            <span class="field-value" id="value-email"></span>
+          </div>
+          <div class="aadhaar-field" id="field-address" style="display:none;">
+            <span class="field-label">ADDRESS</span>
+            <span class="field-value" id="value-address"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="result-section">
+        <div class="card-title" style="margin-top:16px;">Text Content</div>
+        <div class="result-card">
+          <div id="resultText" class="result-text">(no text)</div>
+        </div>
+      </div>
+
+      <div class="result-section" id="imageSection" style="display:none;">
+        <div class="card-title">Photo</div>
+        <div class="extracted-image" onclick="showImageModal()">
+          <img id="extractedImage">
+          <div class="zoom-hint">Tap to zoom</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Full Decoded Data Section -->
+    <div id="fullDecodedCard" class="card" style="display:none;">
+      <div class="card-title">Full Decoded Data (Raw)</div>
+      <div class="btn-row" style="margin-bottom: 16px;">
+        <button class="btn btn-secondary" onclick="copyFullData()">
+          <span>📋</span> Copy All
+        </button>
+      </div>
+      
+      <!-- Raw Text with Delimiters -->
+      <div class="debug-block">
+        <div class="debug-label">Raw Text (ÿ = field delimiter)</div>
+        <div id="fullRawText" class="debug-content" style="white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto;"></div>
+      </div>
+      
+      <!-- Parsed Fields Table -->
+      <div class="debug-block">
+        <div class="debug-label">Parsed Fields (delimiter-separated)</div>
+        <div id="fullFieldsList" class="fields-table"></div>
+      </div>
+      
+      <!-- Final Parsed Result -->
+      <div class="debug-block">
+        <div class="debug-label">Final Parsed Result</div>
+        <div id="fullParsedResult" class="debug-content" style="white-space: pre-wrap;"></div>
+      </div>
+    </div>
+
+    <!-- Debug Accordion -->
+    <div id="debugAccordion" class="accordion" style="display:none;">
+      <div class="accordion-header" onclick="toggleAccordion(this)">
+        <span>Debug Information</span>
+        <span class="accordion-icon">▼</span>
+      </div>
+      <div class="accordion-content">
+        <div class="accordion-inner">
+          <div class="debug-block">
+            <div class="debug-label">Raw QR Data</div>
+            <div id="rawData" class="debug-content"></div>
+          </div>
+          <div class="debug-block">
+            <div class="debug-label">Decompressed Hex</div>
+            <div id="decompressedHex" class="debug-content"></div>
+          </div>
+          <div class="debug-block">
+            <div class="debug-label">ASCII Preview</div>
+            <div id="decompressedAscii" class="debug-content"></div>
+          </div>
+          <div class="debug-block">
+            <div class="debug-label">Byte Attempts</div>
+            <div id="debug" class="debug-content"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- Encode Section -->
+  <section id="encode" class="section">
+
+    <div class="card">
+      <div class="card-title">Aadhaar Data Entry</div>
+      
+      <!-- Row 1: Name and Gender -->
+      <div class="form-row">
+        <div class="input-group flex-2">
+          <label class="input-label">Name *</label>
+          <input type="text" id="encodeName" placeholder="Full Name" class="form-input">
+        </div>
+        <div class="input-group flex-1">
+          <label class="input-label">Gender *</label>
+          <select id="encodeGender" class="form-input">
+            <option value="M">Male</option>
+            <option value="F">Female</option>
+            <option value="T">Transgender</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Row 2: DOB and Aadhaar -->
+      <div class="form-row">
+        <div class="input-group flex-1">
+          <label class="input-label">Date of Birth *</label>
+          <input type="text" id="encodeDOB" placeholder="DD-MM-YYYY" class="form-input">
+        </div>
+        <div class="input-group flex-1">
+          <label class="input-label">Aadhaar (Last 4 digits)</label>
+          <input type="text" id="encodeAadhaar" placeholder="1234" maxlength="4" class="form-input">
+        </div>
+      </div>
+
+      <!-- Row 3: Guardian -->
+      <div class="input-group">
+        <label class="input-label">Guardian (C/O, S/O, D/O, W/O)</label>
+        <input type="text" id="encodeGuardian" placeholder="C/O S/O Father Name" class="form-input">
+      </div>
+
+      <!-- Row 4: Address Line 1 (Locality/Village) -->
+      <div class="input-group">
+        <label class="input-label">Locality / Village / Town</label>
+        <input type="text" id="encodeLocality" placeholder="Village or Town name" class="form-input">
+      </div>
+
+      <!-- Row 4b: Village Alias (optional) -->
+      <div class="input-group">
+        <label class="input-label">Village/Town Alias (optional)</label>
+        <input type="text" id="encodeVillageAlias" placeholder="e.g., Gandhabazar alias Raghunathganj" class="form-input">
+      </div>
+
+      <!-- Row 5: Post Office and Sub-District -->
+      <div class="form-row">
+        <div class="input-group flex-1">
+          <label class="input-label">Post Office</label>
+          <input type="text" id="encodePO" placeholder="Post Office" class="form-input">
+        </div>
+        <div class="input-group flex-1">
+          <label class="input-label">Sub-District / Tehsil</label>
+          <input type="text" id="encodeSubDist" placeholder="Sub-District" class="form-input">
+        </div>
+      </div>
+
+      <!-- Row 6: District and State -->
+      <div class="form-row">
+        <div class="input-group flex-1">
+          <label class="input-label">District *</label>
+          <input type="text" id="encodeDistrict" placeholder="District" class="form-input">
+        </div>
+        <div class="input-group flex-1">
+          <label class="input-label">State *</label>
+          <select id="encodeState" class="form-input">
+            <option value="">Select State</option>
+            <option value="Andhra Pradesh">Andhra Pradesh</option>
+            <option value="Arunachal Pradesh">Arunachal Pradesh</option>
+            <option value="Assam">Assam</option>
+            <option value="Bihar">Bihar</option>
+            <option value="Chhattisgarh">Chhattisgarh</option>
+            <option value="Delhi">Delhi</option>
+            <option value="Goa">Goa</option>
+            <option value="Gujarat">Gujarat</option>
+            <option value="Haryana">Haryana</option>
+            <option value="Himachal Pradesh">Himachal Pradesh</option>
+            <option value="Jharkhand">Jharkhand</option>
+            <option value="Karnataka">Karnataka</option>
+            <option value="Kerala">Kerala</option>
+            <option value="Madhya Pradesh">Madhya Pradesh</option>
+            <option value="Maharashtra">Maharashtra</option>
+            <option value="Manipur">Manipur</option>
+            <option value="Meghalaya">Meghalaya</option>
+            <option value="Mizoram">Mizoram</option>
+            <option value="Nagaland">Nagaland</option>
+            <option value="Odisha">Odisha</option>
+            <option value="Punjab">Punjab</option>
+            <option value="Rajasthan">Rajasthan</option>
+            <option value="Sikkim">Sikkim</option>
+            <option value="Tamil Nadu">Tamil Nadu</option>
+            <option value="Telangana">Telangana</option>
+            <option value="Tripura">Tripura</option>
+            <option value="Uttar Pradesh">Uttar Pradesh</option>
+            <option value="Uttarakhand">Uttarakhand</option>
+            <option value="West Bengal">West Bengal</option>
+            <option value="Jammu and Kashmir">Jammu and Kashmir</option>
+            <option value="Ladakh">Ladakh</option>
+            <option value="Chandigarh">Chandigarh</option>
+            <option value="Puducherry">Puducherry</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Row 7: PIN Code -->
+      <div class="form-row">
+        <div class="input-group flex-1">
+          <label class="input-label">PIN Code *</label>
+          <input type="text" id="encodePIN" placeholder="6-digit PIN" maxlength="6" class="form-input">
+        </div>
+        <div class="input-group flex-1">
+          <!-- Empty for alignment -->
+        </div>
+      </div>
+
+      <!-- Row 8: Mobile and Email -->
+      <div class="form-row">
+        <div class="input-group flex-1">
+          <label class="input-label">Mobile (masked)</label>
+          <input type="text" id="encodeMobile" placeholder="XXXXXX1234" class="form-input">
+        </div>
+        <div class="input-group flex-1">
+          <label class="input-label">Email (masked)</label>
+          <input type="text" id="encodeEmail" placeholder="axxxx@gxxxxx" class="form-input">
+        </div>
+      </div>
+
+      <!-- Photo Upload -->
+      <div class="input-group">
+        <label class="input-label">Photo (optional)</label>
+        <div class="file-input-wrapper">
+          <input type="file" id="encodeImage" accept="image/*">
+          <div class="file-input-btn" onclick="document.getElementById('encodeImage').click()">
+            <span>📷</span>
+            <span>Add Photo</span>
+          </div>
+        </div>
+        <div id="encodeFilePreview" class="file-preview">
+          <img id="encodePreviewImg">
+          <div class="file-preview-info">Photo selected</div>
+          <button class="file-preview-remove" onclick="removeEncodeImage()">&times;</button>
+        </div>
+      </div>
+
+      <!-- Face Detection Toggle -->
+      <div class="toggle-container">
+        <div class="toggle-label">
+          <span>Auto Face Detection</span>
+          <span class="toggle-hint">Automatically crop to face (recommended for ID photos)</span>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="faceDetectToggle" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <!-- Signature Toggle -->
+      <div class="toggle-container">
+        <div class="toggle-label">
+          <span>Add Signature Placeholder</span>
+          <span class="toggle-hint">Adds 256-byte placeholder (format only, won't verify)</span>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="signatureToggle" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="encodeBtn" onclick="encodeQR()">
+          <span id="encodeBtnText">Generate QR</span>
+        </button>
+        <button class="btn btn-secondary" onclick="clearEncodeForm()">
+          <span>🗑</span> Clear
+        </button>
+      </div>
+
+      <div id="encodeStatus" class="status info">
+        <span class="status-icon"></span>
+        <span id="encodeStatusText">Ready to encode</span>
+      </div>
+    </div>
+
+    <!-- Generated QR -->
+    <div id="qrResultCard" class="card" style="display:none;">
+      <div class="card-title">Generated QR Code</div>
+      <div class="qr-result">
+        <img id="generatedQR">
+      </div>
+      <div class="btn-row" style="margin-top:16px;">
+        <button class="btn btn-success" onclick="downloadQR()">
+          <span>⬇</span> Download
+        </button>
+        <button class="btn btn-secondary" onclick="copyQR()">
+          <span>📋</span> Copy
+        </button>
+      </div>
+    </div>
+
+  </section>
+
+</main>
+
+<!-- Image Modal -->
+<div id="imageModal" class="modal-overlay" onclick="hideImageModal(event)">
+  <div class="modal-content" onclick="event.stopPropagation()">
+    <button class="modal-close" onclick="hideImageModal()">&times;</button>
+    <img id="modalImage">
+    <div class="modal-actions">
+      <button class="modal-btn btn-success" onclick="downloadExtractedImage()">
+        <span>⬇</span> Download
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast"></div>
+
+<script>
+// State
+let currentFile = null;
+let generatedQRUrl = null;
+let extractedImageBase64 = null;
+
+// Elements
+const $id = id => document.getElementById(id);
+const dropZone = $id('dropZone');
+const fileInput = $id('fileInput');
+const preview = $id('preview');
+const previewContainer = $id('previewContainer');
+const statusEl = $id('status');
+const statusText = $id('statusText');
+const stepsEl = $id('steps');
+const resultText = $id('resultText');
+
+// Tab switching
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    tab.classList.add('active');
+    $id(tab.dataset.tab).classList.add('active');
+  });
+});
+
+// Status helper
+function setStatus(el, text, type = 'info') {
+  el.className = 'status ' + type;
+  el.querySelector('span:last-child').textContent = text;
+}
+
+// Toast
+function showToast(message) {
+  const toast = $id('toast');
+  toast.textContent = message;
+  toast.classList.add('visible');
+  setTimeout(() => toast.classList.remove('visible'), 2500);
+}
+
+// Clear decode
+function clearDecode() {
+  currentFile = null;
+  preview.src = '';
+  previewContainer.classList.remove('visible');
+  resultText.textContent = '(no text)';
+  $id('stepsCard').style.display = 'none';
+  $id('resultsCard').style.display = 'none';
+  $id('debugAccordion').style.display = 'none';
+  $id('imageSection').style.display = 'none';
+  stepsEl.innerHTML = '';
+  setStatus(statusEl, 'Ready to scan', 'info');
+}
+
+// Set preview
+function setPreview(file) {
+  currentFile = file;
+  preview.src = URL.createObjectURL(file);
+  previewContainer.classList.add('visible');
+  setStatus(statusEl, 'Image loaded. Tap Decode.', 'info');
+}
+
+// Add step
+function addStep(text, ok) {
+  const step = document.createElement('div');
+  step.className = 'step ' + (ok ? 'success' : 'fail');
+  step.innerHTML = `<span class="step-icon">${ok ? '✓' : '✗'}</span><span>${text}</span>`;
+  stepsEl.appendChild(step);
+}
+
+// Decode
+async function decodeCurrent() {
+  if (!currentFile) {
+    setStatus(statusEl, 'Please select an image first', 'error');
+    return;
+  }
+
+  const btn = $id('decodeBtn');
+  const btnText = $id('decodeBtnText');
+  btn.disabled = true;
+  btnText.innerHTML = '<div class="spinner"></div>';
+
+  setStatus(statusEl, 'Decoding...', 'warning');
+  stepsEl.innerHTML = '';
+  $id('stepsCard').style.display = 'block';
+
+  const fd = new FormData();
+  fd.append('file', currentFile);
+
+  try {
+    const res = await fetch('/api/decode', { method: 'POST', body: fd });
+    const data = await res.json();
+
+    if (!data.ok) {
+      setStatus(statusEl, data.error.message, 'error');
+      addStep('Decode failed: ' + data.error.message, false);
+      return;
+    }
+
+    const d = data.data;
+
+    // Steps
+    if (d.steps) {
+      d.steps.forEach(s => addStep(s.msg, s.ok));
+    }
+
+    // Results
+    $id('resultsCard').style.display = 'block';
+    resultText.textContent = d.text || '(no text found)';
+
+    // Aadhaar parsed data
+    if (d.aadhaar_data && d.aadhaar_data.parsed) {
+      const ad = d.aadhaar_data;
+      $id('aadhaarSection').style.display = 'block';
+      
+      // Show fields that have data
+      const fields = ['aadhaar', 'timestamp', 'name', 'gender', 'dob', 'mobile', 'email', 'address'];
+      fields.forEach(field => {
+        const fieldEl = $id('field-' + field);
+        const valueEl = $id('value-' + field);
+        if (ad[field]) {
+          fieldEl.style.display = 'flex';
+          valueEl.textContent = ad[field];
+        } else {
+          fieldEl.style.display = 'none';
+        }
+      });
+    } else {
+      $id('aadhaarSection').style.display = 'none';
+    }
+
+    // Image
+    if (d.image_found && d.image_base64) {
+      extractedImageBase64 = d.image_base64;
+      $id('extractedImage').src = 'data:image/jpeg;base64,' + d.image_base64;
+      $id('imageSection').style.display = 'block';
+    } else {
+      $id('imageSection').style.display = 'none';
+    }
+
+    // Debug
+    $id('debugAccordion').style.display = 'block';
+    $id('rawData').textContent = d.raw_preview || '';
+    $id('decompressedHex').textContent = d.decompressed_hex || '';
+    $id('decompressedAscii').textContent = d.decompressed_ascii || '';
+
+    let debugStr = '';
+    if (d.debug && d.debug.attempts) {
+      d.debug.attempts.forEach(a => {
+        debugStr += `extra=${a.extra}, size=${a.size}\n`;
+      });
+      debugStr += '\nSUCCESS at: ' + d.debug.success;
+    }
+    $id('debug').textContent = debugStr;
+
+    // FULL DECODED DATA SECTION
+    if (d.full_raw_text || d.full_fields) {
+      $id('fullDecodedCard').style.display = 'block';
+      
+      // Show raw text with visible delimiters
+      const rawTextEl = $id('fullRawText');
+      rawTextEl.textContent = d.full_raw_text || d.text || '';
+      
+      // Show parsed fields as table
+      const fieldsEl = $id('fullFieldsList');
+      fieldsEl.innerHTML = '';
+      
+      if (d.full_fields && d.full_fields.length > 0) {
+        d.full_fields.forEach((field, idx) => {
+          const row = document.createElement('div');
+          row.className = 'field-row';
+          
+          const indexEl = document.createElement('div');
+          indexEl.className = 'field-index';
+          indexEl.textContent = `[${idx}]`;
+          
+          const valueEl = document.createElement('div');
+          valueEl.className = 'field-value' + (field === '' ? ' empty' : '');
+          valueEl.textContent = field === '' ? '(empty)' : field;
+          
+          row.appendChild(indexEl);
+          row.appendChild(valueEl);
+          fieldsEl.appendChild(row);
+        });
+      }
+      
+      // Show final parsed result
+      const parsedEl = $id('fullParsedResult');
+      if (d.aadhaar_data) {
+        const ad = d.aadhaar_data;
+        parsedEl.textContent = `AADHAAR: ${ad.aadhaar || 'N/A'}
+TIMESTAMP: ${ad.timestamp || 'N/A'}
+NAME: ${ad.name || 'N/A'}
+GENDER: ${ad.gender || 'N/A'}
+DOB: ${ad.dob || 'N/A'}
+MOBILE: ${ad.mobile || 'N/A'}
+EMAIL: ${ad.email || 'N/A'}
+ADDRESS: ${ad.address || 'N/A'}`;
+      } else {
+        parsedEl.textContent = 'No structured data parsed';
+      }
+    } else {
+      $id('fullDecodedCard').style.display = 'none';
+    }
+
+    const hasContent = d.text || d.image_found;
+    setStatus(statusEl, hasContent ? 'Decoded successfully!' : 'Decoded, but no content found', hasContent ? 'success' : 'warning');
+
+  } catch (e) {
+    setStatus(statusEl, 'Error: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btnText.textContent = 'Decode QR';
+  }
+}
+
+// Analyze QR
+async function analyzeQR() {
+  if (!currentFile) {
+    setStatus(statusEl, 'Please select an image first', 'error');
+    return;
+  }
+
+  setStatus(statusEl, 'Analyzing...', 'warning');
+
+  const fd = new FormData();
+  fd.append('file', currentFile);
+
+  try {
+    const res = await fetch('/api/analyze', { method: 'POST', body: fd });
+    const data = await res.json();
+
+    if (!data.ok) {
+      setStatus(statusEl, data.error.message, 'error');
+      return;
+    }
+
+    const a = data.analysis;
+
+    // Display analysis
+    $id('analysisCard').style.display = 'block';
+    const analysisHTML = `
+      <div class="result-text">
+        <strong>QR Type:</strong> ${a.qr_type}<br>
+        <strong>Format:</strong> ${a.estimated_format}<br>
+        <strong>Data Length:</strong> ${a.raw_length} ${a.is_numeric ? 'digits' : 'chars'}<br>
+        ${a.compression_method ? `<strong>Compression:</strong> ${a.compression_method}<br>` : ''}
+        ${a.decompressed_size ? `<strong>Decompressed Size:</strong> ${a.decompressed_size} bytes<br>` : ''}
+        <br>
+        <strong>Preview:</strong><br>
+        <code style="word-break:break-all;">${a.preview}</code>
+      </div>
+    `;
+    $id('analysisContent').innerHTML = analysisHTML;
+    setStatus(statusEl, 'Analysis complete!', 'success');
+
+  } catch (e) {
+    setStatus(statusEl, 'Error: ' + e.message, 'error');
+  }
+}
+
+// Accordion
+function toggleAccordion(header) {
+  header.parentElement.classList.toggle('open');
+}
+
+// Image modal
+function showImageModal() {
+  if (extractedImageBase64) {
+    $id('modalImage').src = 'data:image/jpeg;base64,' + extractedImageBase64;
+    $id('imageModal').classList.add('visible');
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+function hideImageModal(e) {
+  if (!e || e.target === $id('imageModal')) {
+    $id('imageModal').classList.remove('visible');
+    document.body.style.overflow = '';
+  }
+}
+
+function downloadExtractedImage() {
+  if (extractedImageBase64) {
+    const a = document.createElement('a');
+    a.href = 'data:image/jpeg;base64,' + extractedImageBase64;
+    a.download = 'extracted_photo.jpg';
+    a.click();
+    showToast('Photo downloaded!');
+  }
+}
+
+// Drag & drop
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag');
+  if (e.dataTransfer.files[0]) setPreview(e.dataTransfer.files[0]);
+});
+
+fileInput.addEventListener('change', e => {
+  if (e.target.files[0]) setPreview(e.target.files[0]);
+});
+
+// Paste
+document.addEventListener('paste', e => {
+  for (const item of e.clipboardData.items) {
+    if (item.type.startsWith('image')) {
+      const file = new File([item.getAsFile()], 'pasted.png', { type: item.type });
+      setPreview(file);
+      showToast('Image pasted!');
+      break;
+    }
+  }
+});
+
+// Encode section
+const encodeImageInput = $id('encodeImage');
+const encodePreview = $id('encodeFilePreview');
+const encodePreviewImg = $id('encodePreviewImg');
+
+encodeImageInput.addEventListener('change', e => {
+  if (e.target.files[0]) {
+    encodePreviewImg.src = URL.createObjectURL(e.target.files[0]);
+    encodePreview.classList.add('visible');
+  }
+});
+
+function removeEncodeImage() {
+  encodeImageInput.value = '';
+  encodePreview.classList.remove('visible');
+}
+
+async function encodeQR() {
+  // Collect form field values
+  const name = $id('encodeName').value.trim();
+  const gender = $id('encodeGender').value;
+  const dob = $id('encodeDOB').value.trim();
+  const aadhaar = $id('encodeAadhaar').value.trim();
+  const guardian = $id('encodeGuardian').value.trim();
+  const locality = $id('encodeLocality').value.trim();
+  const villageAlias = $id('encodeVillageAlias').value.trim();
+  const po = $id('encodePO').value.trim();
+  const subDist = $id('encodeSubDist').value.trim();
+  const district = $id('encodeDistrict').value.trim();
+  const state = $id('encodeState').value;
+  const pin = $id('encodePIN').value.trim();
+  const mobile = $id('encodeMobile').value.trim();
+  const email = $id('encodeEmail').value.trim();
+  
+  const imageFile = encodeImageInput.files[0];
+  const encStatus = $id('encodeStatus');
+  const faceDetect = $id('faceDetectToggle').checked;
+  const addSignature = $id('signatureToggle').checked;
+
+  // Validation
+  if (!name) {
+    setStatus(encStatus, 'Name is required', 'error');
+    return;
+  }
+  if (!dob) {
+    setStatus(encStatus, 'Date of Birth is required', 'error');
+    return;
+  }
+  if (!district || !state || !pin) {
+    setStatus(encStatus, 'District, State and PIN are required', 'error');
+    return;
+  }
+
+  const btn = $id('encodeBtn');
+  const btnText = $id('encodeBtnText');
+  btn.disabled = true;
+  btnText.innerHTML = '<div class="spinner"></div>';
+
+  setStatus(encStatus, 'Generating Aadhaar QR...', 'warning');
+
+  // Build JSON for Aadhaar format
+  const aadhaarData = {
+    name: name,
+    dob: dob,
+    gender: gender,
+    aadhaar: aadhaar || '0000',
+    guardian: guardian,
+    locality: locality,
+    villageAlias: villageAlias || locality,
+    po: po,
+    subDist: subDist,
+    district: district,
+    state: state,
+    pin: pin,
+    mobile: mobile,
+    email: email
+  };
+
+  const fd = new FormData();
+  fd.append('text', JSON.stringify(aadhaarData));
+  if (imageFile) fd.append('image', imageFile);
+  fd.append('face_detect', faceDetect ? 'true' : 'false');
+  fd.append('add_signature', addSignature ? 'true' : 'false');
+
+  try {
+    const res = await fetch('/api/encode', { method: 'POST', body: fd });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error?.message || 'Failed');
+    }
+
+    // Get encode info from header
+    const encodeInfo = res.headers.get('X-Encode-Info');
+    if (encodeInfo) {
+      const info = JSON.parse(encodeInfo);
+      if (info.face_detected) {
+        showToast('Face detected and cropped!');
+      }
+    }
+
+    const blob = await res.blob();
+    generatedQRUrl = URL.createObjectURL(blob);
+
+    $id('generatedQR').src = generatedQRUrl;
+    $id('qrResultCard').style.display = 'block';
+
+    setStatus(encStatus, 'QR generated!', 'success');
+
+  } catch (e) {
+    setStatus(encStatus, 'Error: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btnText.textContent = 'Generate QR';
+  }
+}
+
+// Clear encode form
+function clearEncodeForm() {
+  $id('encodeName').value = '';
+  $id('encodeGender').value = 'M';
+  $id('encodeDOB').value = '';
+  $id('encodeAadhaar').value = '';
+  $id('encodeGuardian').value = '';
+  $id('encodeLocality').value = '';
+  $id('encodeVillageAlias').value = '';
+  $id('encodePO').value = '';
+  $id('encodeSubDist').value = '';
+  $id('encodeDistrict').value = '';
+  $id('encodeState').value = '';
+  $id('encodePIN').value = '';
+  $id('encodeMobile').value = '';
+  $id('encodeEmail').value = '';
+  removeEncodeImage();
+  $id('qrResultCard').style.display = 'none';
+  setStatus($id('encodeStatus'), 'Ready to encode', 'info');
+}
+
+// Verify data integrity (deprecated - using form now)
+async function verifyData() {
+  const encStatus = $id('encodeStatus');
+  setStatus(encStatus, 'Use Generate QR to create and verify', 'info');
+}
+
+function downloadQR() {
+  if (generatedQRUrl) {
+    const a = document.createElement('a');
+    a.href = generatedQRUrl;
+    a.download = 'qrcode.png';
+    a.click();
+    showToast('QR downloaded!');
+  }
+}
+
+async function copyQR() {
+  if (generatedQRUrl) {
+    try {
+      const res = await fetch(generatedQRUrl);
+      const blob = await res.blob();
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      showToast('QR copied!');
+    } catch {
+      showToast('Copy not supported');
+    }
+  }
+}
+
+// Copy full decoded data
+function copyFullData() {
+  const rawText = $id('fullRawText').textContent;
+  const parsedResult = $id('fullParsedResult').textContent;
+  
+  // Build full copy text
+  let copyText = '=== RAW TEXT (ÿ = delimiter) ===\n';
+  copyText += rawText + '\n\n';
+  
+  copyText += '=== PARSED FIELDS ===\n';
+  const fields = document.querySelectorAll('#fullFieldsList .field-row');
+  fields.forEach((row, idx) => {
+    const value = row.querySelector('.field-value').textContent;
+    copyText += `[${idx}]: ${value}\n`;
+  });
+  
+  copyText += '\n=== FINAL PARSED ===\n';
+  copyText += parsedResult;
+  
+  navigator.clipboard.writeText(copyText).then(() => {
+    showToast('Full data copied!');
+  }).catch(() => {
+    showToast('Copy failed');
+  });
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') hideImageModal();
+});
+</script>
+
+</body>
+</html>
